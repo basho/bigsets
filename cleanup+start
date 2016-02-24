@@ -1,0 +1,24 @@
+#!/bin/bash
+
+echo "stopping nodes"
+
+for d in dev/dev{1..5}; do
+    $d/bin/bigset stop
+    $d/bin/bigset ping
+done
+
+echo "clear data and start"
+
+for d in dev/dev{1..5}; do
+    rm -Rf $d/[0-9]*
+    $d/bin/bigset start
+    $d/bin/bigset ping
+done
+
+while ! dev/dev1/bin/bigset-admin transfers | grep -iqF "No transfers active"
+do
+    echo "Transfers in Progress"
+    sleep 10
+done
+
+dev/dev1/bin/bigset-admin member-status

@@ -249,6 +249,16 @@ case "$1" in
         $NODETOOL rpc riak_core_console ring_status $@
         ;;
 
+    transfers)
+        if [ $# -ne 1 ]; then
+            echo "Usage: $SCRIPT transfers"
+            exit 1
+        fi
+        shift
+
+        $NODETOOL rpc riak_core_console transfers "$@"
+        ;;
+
     services)
         $NODETOOL rpcterms riak_core_node_watcher services ''
         ;;
@@ -288,7 +298,7 @@ case "$1" in
         ;;
     *)
         echo "Usage: $SCRIPT { cluster | down | ringready | member-status | "
-        echo "                    ring-status | services | wait-for-service "
+        echo "                 ring-status | services | transfers | wait-for-service "
         exit 1
         ;;
 esac
