@@ -468,7 +468,11 @@ replica_inserts(Clock0, Elements) ->
         end,
     lists:foldl(F, {Clock0, []}, Elements).
 
-insert_ctx(Clock, undefined) ->
+insert_ctx(_Clock, undefined) ->
+    %% No context, be safe
+    bigset:to_bin(bigset_clock:fresh());
+insert_ctx(Clock, local) ->
+    %% explicitly want to use the context at the coordinating vnode
     bigset:to_bin(Clock);
 insert_ctx(_Clock, Ctx) when is_binary(Ctx) ->
     Ctx;

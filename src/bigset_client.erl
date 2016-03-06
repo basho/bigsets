@@ -62,7 +62,7 @@ update(Set, Adds, Removes, Options, {?MODULE, Node}) ->
     Me = self(),
     ReqId = mk_reqid(),
     %% if there are removes, there must a Ctx
-    Ctx = validate_ctx(Removes, proplists:get_value(ctx, Options)),
+    Ctx = proplists:get_value(ctx, Options),
     Op = ?OP{set=Set, inserts=Adds, removes=Removes, ctx=Ctx},
     case node() of
         Node ->
@@ -73,14 +73,6 @@ update(Set, Adds, Removes, Options, {?MODULE, Node}) ->
     Timeout = recv_timeout(Options),
     wait_for_reqid(ReqId, Timeout).
 
-%% @private right now removes _MUST_ have a binary-context. Throw if
-%% they do not!
-validate_ctx([], Ctx) ->
-    Ctx;
-validate_ctx(_Removes, Ctx) when not is_binary(Ctx) ->
-    throw({error, removes_require_ctx});
-validate_ctx(_Removes, Ctx) ->
-    Ctx.
 
 -spec read(set(),
            Options :: proplists:proplist()) ->
