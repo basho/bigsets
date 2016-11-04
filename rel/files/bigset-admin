@@ -228,7 +228,7 @@ case "$1" in
             echo "Node is not running!"
             exit 1
         fi
-        shift
+        #shift
 
         $NODETOOL rpc riak_core_console transfers "$@"
         ;;
