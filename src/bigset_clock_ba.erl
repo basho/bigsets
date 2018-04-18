@@ -62,7 +62,7 @@
 to_bin(Clock) ->
     term_to_binary(Clock, [compressed]).
 
--spec from_bin(clock()) -> binary().
+-spec from_bin(binary()) -> clock().
 from_bin(Bin) ->
     binary_to_term(Bin).
 
@@ -96,7 +96,7 @@ get_dot(Actor, {Clock, _Dots}) ->
     {Actor, riak_dt_vclock:get_counter(Actor, Clock)}.
 
 %% @doc a sorted list of all the actors in `Clock'.
--spec all_nodes(clock()) -> [actor()].
+-spec all_nodes(clock()) -> [Actor::binary()].
 all_nodes({Clock, Dots}) ->
     %% NOTE the riak_dt_vclock:all_nodes/1 returns a sorted list
     lists:usort(lists:merge(riak_dt_vclock:all_nodes(Clock),
@@ -186,7 +186,7 @@ fetch_dot_set(Actor, Seen) ->
 
 %% @doc Remove dots seen by `Clock' from `Dots'. Return a list of
 %% `dot()' unseen by `Clock'. Return `[]' if all dots seens.
--spec subtract_seen(clock(), [dot()]) -> dot().
+-spec subtract_seen(clock(), [dot()]) -> [dot()].
 subtract_seen(Clock, Dots) ->
     %% @TODO(rdb|optimise) this is maybe a tad inefficient.
     lists:filter(fun(Dot) ->
@@ -258,7 +258,7 @@ get_counter(Actor, {Clock, _Dots}=_Clock) ->
 %% @private when events have been added to a clock, gaps may have
 %% closed. Check the dot_cloud entries and if gaps have closed shrink
 %% the dot_cloud.
--spec compress_seen(clock(), dot_cloud()) -> clock().
+-spec compress_seen(riak_dt_vclock:vclock(), dot_cloud()) -> clock().
 compress_seen(Clock, Seen) ->
     ?DICT:fold(fun(Node, Dotset, {ClockAcc, SeenAcc}) ->
                        Cnt = riak_dt_vclock:get_counter(Node, Clock),
@@ -278,7 +278,7 @@ compress_seen(Clock, Seen) ->
                Seen).
 
 %% @private worker for `compress_seen' above.
--spec compress(pos_integer(), dot_set()) -> {pos_integer(), dot_set()}.
+-spec compress(non_neg_integer(), dot_set()) -> {non_neg_integer(), dot_set()}.
 compress(Base, BitArray) ->
     bigset_bitarray:compact_contiguous(Base, BitArray).
 
@@ -341,6 +341,7 @@ dotset_descends(CntrA, DotsetA, DotsetB) ->
     bigset_bitarray:is_subset(DotsetB2, DotsetA).
 
 %% @doc are A and B the same logical clock? True if so.
+-spec equal(clock(), clock()) -> boolean().
 equal(A, B) ->
     descends(A, B) andalso descends(B, A).
 
@@ -389,33 +390,33 @@ intersection(A, B) ->
 -spec tombstone_from_digest(SetClock::clock(), Digest::clock()) -> Tombstone::clock().
 tombstone_from_digest(Clock, Digest) ->
     %% work on each actor in A
-    {AVV, ADC} = Clock,
-    {BVV, BDC} = Digest,
+    {ClockVV, ClockDC} = Clock,
+    {DigestVV, DigestDC} = Digest,
     AActors = all_nodes(Clock),
     lists:foldl(fun(Actor, TombstoneAcc) ->
-                        BaseDiff0 = base_diff(Actor, AVV, BVV),
-                        BDotSet = fetch_dot_set(Actor, BDC),
-                        %% Subtract any dots from B's dotset that are
-                        %% in A's base and not in B's base.
-                        BaseDC = bigset_bitarray:range_subtract(BaseDiff0, BDotSet),
-                        %% Subtract anything from A's dotset that is in B's dotset
-                        TSDC = bigset_bitarray:subtract(fetch_dot_set(Actor, ADC),
-                                                         BDotSet),
+                        BaseDiff0 = base_diff(Actor, ClockVV, DigestVV),
+                        DigestDotSet = fetch_dot_set(Actor, DigestDC),
+                        %% Subtract any dots from digest's dotset that are
+                        %% in clock's base and not in digests's base.
+                        BaseDC = bigset_bitarray:range_subtract(BaseDiff0, DigestDotSet),
+                        %% Subtract anything from clock's dotset that is in digest's dotset
+                        TombstoneDC = bigset_bitarray:subtract(fetch_dot_set(Actor, ClockDC),
+                                                        DigestDotSet),
 
-                        %% the clock A is already compacted, the
-                        %% BaseDC is made from the base of A therefore
-                        %% < min(ADC) it may contain '1', for example.
+                        %% the clock is already compacted, the
+                        %% BaseDC is made from the base of the clock, therefore
+                        %% < min(ClockDC) it may contain '1', for example.
                         {Base, DC0} = compress(0, BaseDC),
-                        %% DC0 must be disjoint from TSDC, and
+                        %% DC0 must be disjoint from TombstoneDC, and
                         %% therefore cannot be compressed
-                        DC = bigset_bitarray:union(DC0, TSDC),
+                        DC = bigset_bitarray:union(DC0, TombstoneDC),
                         update_clock_acc(Actor, Base, DC, TombstoneAcc)
                 end,
                 fresh(),
                 AActors).
 
 %% @private update the clock's entry for the actor base and dotset.
--spec update_clock_acc(actor(), pos_integer(), dot_set(), clock()) -> clock().
+-spec update_clock_acc(binary(), pos_integer(), bigset_bitarray:bitarray(), clock()) -> clock().
 update_clock_acc(Actor, Base, Dotset, {Clock0, Seen0}) ->
     Clock = riak_dt_vclock:set_counter(Actor, Base, Clock0),
     Seen = case bigset_bitarray:is_empty(Dotset) of
